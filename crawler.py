@@ -1,22 +1,19 @@
 # -*- coding:utf-8 -*-
 import httplib2
-import urllib
 import json
 import traceback
 import re
-import bs4
 from bs4 import BeautifulSoup
 # from goose import Goose
 from selenium import webdriver
 import MySQLdb
-
 
 mainpage_url = 'http://news.yahoo.com/us/most-popular/'
 
 
 def urlencode(context_id, comment_num):
     rurl = 'https://www.yahoo.com/news/_td/api/resource/canvass.getMessageListForContext_ns' \
-           ';context=' + context_id + ';count=' + comment_num + \
+           ';context=' + context_id + ';count=' + str(comment_num) + \
            ';index=null' \
            ';lang=en-US' \
            ';namespace=yahoo_content' \
@@ -112,7 +109,7 @@ def parse_news_title_and_content(news_url):
     return news_dict
 
 
-def parse_comments(content_url):
+def parse_comments(session, content_url, news_dict):
     print content_url
     sentiment_count = {}
     canvassMessages = []
@@ -120,7 +117,7 @@ def parse_comments(content_url):
         head, content = httplib2.Http().request(content_url)
         json_data = json.loads(content)
         data = json_data['data']
-        total_count = data['total']['count']
+        readingUserCount = data['userActivityNotification']['readingUserCount']
         sentiments = data['sentiments']
         for s_c in sentiments:
             sentiment_count[s_c['sentiment']] = s_c['count']
@@ -131,37 +128,32 @@ def parse_comments(content_url):
             canvassMessage['details'] = comment['details']['userText']
             canvassMessage['reactionStats'] = comment['reactionStats']
             canvassMessages[c_id] = canvassMessage
-            # try:
-            #     save_comments(session, nickname.encode('utf-8'), thumb_up_count, thumb_down_count,
-            #                   content.encode('utf-8'), 0, has_reply, -1, news_id, event_id, language_type)
-            #     comment_id_db = get_comment_id(session, nickname, content.encode('utf-8'), news_id)
-            #     if span_reply and comment_id_db != -1:
-            #         reply_url = urlencode(reply_base_url, {'content_id': content_id, 'comment_id': comment_id})
-            #         parse_reply_comment(session, reply_url, content_id, comment_id, comment_id_db, 0, news_id, event_id,
-            #                             language_type)
-            # except:
-            #     traceback.print_exc()
+            try:
+                save_comments(session, news_dict['title'], news_dict['content'], news_dict['comment_num'],
+                              news_dict['press_name'], news_dict['content_id'], news_dict['time'],
+                              readingUserCount, sentiment_count, canvassMessages)
+            except:
+                traceback.print_exc()
     except:
         traceback.print_exc()
 
 
-def save_comments(session, nick, thumb_up, thumb_down, content, is_reply, has_reply, reply_comment_id, news_id,
-                  event_id, language_type, mid=''):
+def save_comments(session, title, content, comment_num, press_name, content_id, time, reading_user_count,
+                  sentiment_count, canvass_messages):
     cur = session.cursor()
-    sql = 'insert into parallel_comment(nick, thumb_up, thumb_down, content, is_reply, has_reply, reply_comment_id, news_id, event_id, language_type, mid) values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+    sql = 'insert into news_comment(title, content, comment_num, press_name, content_id, time,' \
+          ' reading_user_count, sentiment_count, canvass_messages) values(%s, %s, %s, %s, %s, %s, %s, %s, %s)'
     t_list = (
-        nick, thumb_up, thumb_down, content, is_reply, has_reply, reply_comment_id, news_id, event_id, language_type,
-        mid)
+    title, content, comment_num, press_name, content_id, time, reading_user_count, sentiment_count, canvass_messages)
     cur.execute(sql, t_list)
     session.commit()
 
 
 if __name__ == '__main__':
-    conn = MySQLdb.connect(host='seis10.se.cuhk.edu.hk', port=3306, user='bshi', passwd='20141031shib', db='bshi', charset='utf8')
+    conn = MySQLdb.connect(host='localhost', port=3306, user='root', passwd='1234', db='yahoo_news', charset='utf8')
     yahoo_mainpage_head, yahoo_mainpage_content = get_news_mainpage()
     url_list = parse_news_from_mainpage(yahoo_mainpage_content)
     for news_url in url_list:
         news_dict = parse_news_title_and_content(news_url)
-        news_c_id = news_dict['content_id']
-        rurl = urlencode(news_c_id, news_dict['comment_num'])
-        parse_comments(rurl)
+        rurl = urlencode(news_dict['content_id'], news_dict['comment_num'])
+        parse_comments(conn, rurl, news_dict)
