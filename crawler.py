@@ -117,21 +117,20 @@ def parse_news_title_and_content(news_url):
     return news_dict
 
 
-# parse_comments(conn, query_id, query_str, order_id+1, news_url, news_dict, reviews_url)
-def parse_comments(session, query_id, query_str, order_id, news_url, news_dict, reviews_url):
+def parse_comments(session, query_id, query_str, order_id, t_news_url, t_news_dict, t_reviews_url):
     try:
-        head, content = httplib2.Http().request(reviews_url)
+        head, content = httplib2.Http().request(t_reviews_url)
         json_data = json.loads(content)
         data = json_data['data']
 
-        rurl_new = urlencode(news_dict['content_id'], data['total']['count'])
+        rurl_new = urlencode(t_news_dict['content_id'], data['total']['count'])
         head, content = httplib2.Http().request(rurl_new)
         json_data = json.loads(content)
         data = json_data['data']
-        # readingUserCount
-        readingUserCount = 0
-        if data['userActivityNotification'] is not None or data['userActivityNotification']['readingUsersCount'] is not None:
-            readingUserCount = data['userActivityNotification']['readingUsersCount']
+        reading_user_count = 0
+        if data['userActivityNotification'] is not None or \
+                        data['userActivityNotification']['readingUsersCount'] is not None:
+            reading_user_count = data['userActivityNotification']['readingUsersCount']
 
         # sentiment count
         sentiment_pos = 0
@@ -147,38 +146,37 @@ def parse_comments(session, query_id, query_str, order_id, news_url, news_dict, 
                 elif s_c['sentiment'] == "NEGATIVE":
                     sentiment_neg = int(s_c['count'])
 
-        canvassMessages = [''] * len(data['canvassMessages'])
+        t_canvass_messages = [''] * len(data['canvassMessages'])
         for c_id, comment in enumerate(data['canvassMessages']):
-            canvassMessage = {}
-            canvassMessage['sentimentLabel'] = ""
+            t_canvass_message = {}
+            t_canvass_message['sentimentLabel'] = ""
             if comment['meta'].has_key('sentimentLabel'):
-                canvassMessage['sentimentLabel'] = comment['meta']['sentimentLabel']
-            canvassMessage['details'] = comment['details']['userText']
-            canvassMessage['reactionStats'] = comment['reactionStats']
-            canvassMessages[c_id] = canvassMessage
-        save_comments(session, query_id, query_str, order_id, news_url, news_dict['title'], news_dict['content'],
-                      data['total']['count'],
-                      news_dict['press_name'], news_dict['content_id'], readingUserCount, sentiment_pos, sentiment_neu,
-                      sentiment_neg, canvassMessages)
+                t_canvass_message['sentimentLabel'] = comment['meta']['sentimentLabel']
+            t_canvass_message['details'] = comment['details']['userText']
+            t_canvass_message['reactionStats'] = comment['reactionStats']
+            t_canvass_messages[c_id] = t_canvass_message
+        saveComments(session, query_id, query_str, order_id, t_news_url, t_news_dict['title'], t_news_dict['content'],
+                     data['total']['count'], t_news_dict['press_name'], t_news_dict['content_id'], reading_user_count,
+                     sentiment_pos, sentiment_neu,
+                     sentiment_neg, t_canvass_messages)
     except:
         traceback.print_exc()
 
 
-def save_comments(session, query_id, query_str, order_id, news_url, title, content, comment_num, press_name, content_id,
-                  reading_user_count,
-                  sentiment_pos, sentiment_neu, sentiment_neg, canvass_messages):
-    # cur = session.cursor()
+def saveComments(session, query_id, query_str, order_id, t_news_url, title, content, comment_num, press_name,
+                 content_id,
+                 reading_user_count,
+                 sentiment_pos, sentiment_neu, sentiment_neg, canvass_messages):
+    cur = session.cursor()
     sql = 'insert into news_comment(query_id, query_str, order_id, news_url, title, content, comment_num, ' \
           'press_name, content_id, reading_user_count, sentiment_pos, sentiment_neu, sentiment_neg, ' \
           'canvass_messages) values'
     t_list = (
-        query_id, query_str, order_id, news_url, title, content, str(comment_num), press_name, str(content_id),
-        str(reading_user_count), str(sentiment_pos), str(sentiment_neu), str(sentiment_neg),
-        str(canvass_messages))
+        str(query_id), str(query_str), str(order_id), str(t_news_url), str(title), str(content), str(comment_num), str(press_name), str(content_id), str(reading_user_count), str(sentiment_pos), str(sentiment_neu), str(sentiment_neg), str(canvass_messages))
     print sql
     print t_list
-    # cur.execute(sql, t_list)
-    # session.commit()
+    cur.execute(sql, t_list)
+    session.commit()
 
 
 if __name__ == '__main__':
