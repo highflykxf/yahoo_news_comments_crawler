@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 import httplib2
+import urllib2
 import json
 import traceback
 import re
@@ -76,15 +77,24 @@ def parse_news_from_mainpage(mainpage_content):
 
 def parse_news_title_and_content(news_url):
     print news_url
-    # 设置chrome选项：不加载图片
-    chromeOptions = webdriver.ChromeOptions()
-    prefs = {"profile.managed_default_content_settings.images": 2}
-    chromeOptions.add_experimental_option("prefs", prefs)
-    driver = webdriver.Chrome(chrome_options=chromeOptions)
-    driver.set_script_timeout(30)
-    driver.get(news_url)
-    time.sleep(20)
-    webpage_content = driver.page_source
+
+    # # 设置chrome选项：不加载图片
+    # chromeOptions = webdriver.ChromeOptions()
+    # prefs = {"profile.managed_default_content_settings.images": 2}
+    # chromeOptions.add_experimental_option("prefs", prefs)
+    # chromeOptions.add_argument('user-agent="Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36"')
+    # driver = webdriver.Chrome(chrome_options=chromeOptions)
+    # driver.set_script_timeout(30)
+    # driver.get(news_url)
+    # time.sleep(20)
+    # webpage_content = driver.page_source
+    try:
+        webpage_content = urllib2.urlopen(urllib2.Request(news_url), timeout= 20).read()
+    except urllib2.HTTPError as e:
+        return None
+
+
+
     soup = BeautifulSoup(webpage_content, "html.parser")
 
     title = soup.find('h1', {'itemprop': 'headline'}).string
@@ -93,7 +103,11 @@ def parse_news_title_and_content(news_url):
     c_num = 2
     # if soup.find(text=re.compile(r'\d+\sreactions')) != None:
     #     c_num = re.findall("\d+", str(soup.find(text=re.compile(r'\d+\sreactions')).encode('utf-8')))[0]
-    press_name = soup.find('span', {'class': 'provider-link'}).string
+    press_name = soup.find('span', {'class': 'provider-link'})
+    if press_name is None:
+        press_name = ""
+    else:
+        press_name = press_name.string
     content_id = soup.find('article', {'itemprop': 'articleBody'})
     if content_id is None:
         return None
@@ -113,7 +127,7 @@ def parse_news_title_and_content(news_url):
     news_dict['press_name'] = press_name.encode('utf-8')
     news_dict['content_id'] = c_id
     news_dict['time'] = news_time
-    driver.close()
+    # driver.close()
     return news_dict
 
 
@@ -128,8 +142,7 @@ def parse_comments(session, query_id, query_str, order_id, t_news_url, t_news_di
         json_data = json.loads(content)
         data = json_data['data']
         reading_user_count = 0
-        if data['userActivityNotification'] is not None or \
-                        data['userActivityNotification']['readingUsersCount'] is not None:
+        if data.has_key('userActivityNotification') and data['userActivityNotification'].has_key('readingUsersCount'):
             reading_user_count = data['userActivityNotification']['readingUsersCount']
 
         # sentiment count
@@ -170,7 +183,7 @@ def saveComments(session, query_id, query_str, order_id, t_news_url, title, cont
     cur = session.cursor()
     sql = 'insert into news_comment(query_id, query_str, order_id, news_url, title, content, comment_num, ' \
           'press_name, content_id, reading_user_count, sentiment_pos, sentiment_neu, sentiment_neg, ' \
-          'canvass_messages) values'
+          'canvass_messages) values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
     t_list = (
         str(query_id), str(query_str), str(order_id), str(t_news_url), str(title), str(content), str(comment_num), str(press_name), str(content_id), str(reading_user_count), str(sentiment_pos), str(sentiment_neu), str(sentiment_neg), str(canvass_messages))
     print sql

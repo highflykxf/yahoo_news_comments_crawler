@@ -20,8 +20,7 @@ def query_yahoo_news(q):
 
     
 if __name__=='__main__':
-    # conn = MySQLdb.connect(host='localhost', port=3306, user='root', passwd='1234', db='yahoo_news', charset='utf8')
-    conn = None
+    conn = MySQLdb.connect(host='localhost', port=3306, user='root', passwd='1234', db='yahoo_news', charset='utf8')
     wb = load_workbook("queries.xlsx")
     sheet = wb.get_sheet_by_name("Sheet1")
     for r_id in range(0, len(sheet['B'])):
